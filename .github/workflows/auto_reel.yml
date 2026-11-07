@@ -1,0 +1,46 @@
+﻿name: 24-7 Facebook Reel Auto Poster
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  post-reel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies & Playwright
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-liberation
+          pip install edge-tts moviepy==1.0.3 Pillow requests playwright numpy
+          playwright install chromium
+
+      - name: Restore Facebook Session Secret
+        env:
+          FB_COOKIES: ${{ secrets.FB_COOKIES_JSON }}
+        run: |
+          echo "$FB_COOKIES" > fb_cookies.json
+
+      - name: Generate and Post Next Category Reel
+        env:
+          GITHUB_ACTIONS: "true"
+        run: python fb_auto_reel_browser.py
+
+      - name: Save Engine State & History (No Duplicates!)
+        run: |
+          git config user.name "AutoReelBot"
+          git config user.email "bot@noreply.github.com"
+          git add engine_state.json posted_history.json followed_pages_insights.json
+          git diff --staged --quiet || git commit -m "Auto-update state and history"
+          git push

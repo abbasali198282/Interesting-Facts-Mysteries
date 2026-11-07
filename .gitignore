@@ -1,0 +1,5 @@
+﻿.venv/
+build_reel/
+fb_chrome_session/
+fb_cookies.json
+__pycache__/
