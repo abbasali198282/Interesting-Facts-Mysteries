@@ -201,7 +201,6 @@ def save_to_history(topic_title: str):
 
 
 def sync_liked_pages_from_browser(page):
-    """Automatically scans https://www.facebook.com/pages/?category=liked&ref=bookmarks inside the active session."""
     if os.path.exists(FOLLOWED_FILE):
         try:
             with open(FOLLOWED_FILE, "r", encoding="utf-8") as f:
@@ -216,7 +215,6 @@ def sync_liked_pages_from_browser(page):
         page.goto(LIKED_PAGES_URL, wait_until="domcontentloaded")
         time.sleep(6)
 
-        # Scroll down to load all 32 followed pages
         for _ in range(5):
             page.mouse.wheel(0, 2200)
             time.sleep(2)
@@ -263,7 +261,6 @@ def sync_liked_pages_from_browser(page):
 
 
 def load_followed_inspiration() -> str:
-    """Loads all synced followed pages + core competitor pages into the AI prompt."""
     base_competitors = [
         "Mysteries Unsolved", "Omarc Mysteries", "MysteriesFA",
         "TheSpookyHunter9", "MindCircuit"
@@ -348,7 +345,6 @@ def build_fallback_story_from_seed(category: dict, history: list) -> dict:
 
 
 def generate_fresh_reel_script(category: dict) -> dict:
-    """Generates a fast-paced 4-scene narrative story modeled on your 32 followed pages."""
     wait_for_internet()
     history = load_history()
     followed_list = load_followed_inspiration()
@@ -713,9 +709,6 @@ def auto_post_reel_and_story(video_path: str, story_img_path: str, caption: str)
             )
             page = browser.pages[0]
 
-        # ----------------------------------------
-        # AUTO-SYNC YOUR 32 FOLLOWED PAGES ONCE
-        # ----------------------------------------
         if not IS_CLOUD:
             sync_liked_pages_from_browser(page)
 
@@ -734,19 +727,16 @@ def auto_post_reel_and_story(video_path: str, story_img_path: str, caption: str)
         dismiss_popups(page)
 
         print("[*] Attaching Reel MP4 via 'Add video'...")
-        uploaded = False
         try:
             with page.expect_file_chooser(timeout=25000) as fc_info:
                 add_video_btn = page.get_by_text("Add video", exact=False).first
                 add_video_btn.click()
             fc_info.value.set_files(video_full_path)
-            uploaded = True
             print(f"[+] Attached Reel video: {video_full_path}")
         except Exception:
             try:
                 file_input = page.locator('input[type="file"]').first
                 file_input.set_input_files(video_full_path)
-                uploaded = True
             except Exception:
                 if not IS_CLOUD:
                     print("    [!] Click 'Add video' manually in the window (waiting 45s)...")
@@ -768,27 +758,37 @@ def auto_post_reel_and_story(video_path: str, story_img_path: str, caption: str)
         print("[*] Waiting 15 seconds for Reel processing...")
         time.sleep(15)
 
+        # Finalize for instant publishing (Avoids past schedule timestamp errors)
+        print("[*] Finalizing Reel for instant publishing...")
         for _ in range(3):
             try:
                 next_btn = page.get_by_role("button", name="Next").first
                 if next_btn.is_visible():
                     next_btn.click()
-                    time.sleep(5)
+                    time.sleep(4)
             except Exception:
                 pass
 
-        try:
-            share_btn = page.get_by_role("button", name="Share", exact=True).or_(
-                page.get_by_role("button", name="Publish", exact=True)
-            ).first
-            if share_btn.is_visible():
-                share_btn.click()
-                print("[+] Reel Published! Waiting 15 seconds to finalize...")
-                time.sleep(15)
-            else:
-                time.sleep(25)
-        except Exception:
-            time.sleep(25)
+        published = False
+        for btn_text in ["Share now", "Share", "Publish"]:
+            try:
+                btn = page.get_by_role("button", name=btn_text, exact=True).first
+                if btn.is_visible():
+                    btn.click()
+                    print(f"[+] Clicked instant publish button: '{btn_text}'")
+                    published = True
+                    break
+            except Exception:
+                pass
+
+        if not published:
+            try:
+                page.locator('div[aria-label="Share"], div[aria-label="Publish"]').first.click()
+            except Exception:
+                pass
+
+        print("[+] Reel Published! Waiting 15 seconds to finalize...")
+        time.sleep(15)
 
         # ----------------------------------------
         # PART B: PUBLISH DEDICATED STORY CARD
@@ -824,7 +824,7 @@ def auto_post_reel_and_story(video_path: str, story_img_path: str, caption: str)
 
                 time.sleep(10)
 
-                for share_label in ["Share", "Publish", "Share story", "Share to story"]:
+                for share_label in ["Share now", "Share", "Publish", "Share story", "Share to story"]:
                     try:
                         s_btn = page.get_by_role("button", name=share_label, exact=True).first
                         if s_btn.is_visible():
